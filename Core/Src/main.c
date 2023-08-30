@@ -106,10 +106,11 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  char msg[40] = {0};
   while (1)
   {
-	char msg[40] = {0};
-	snprintf(msg, 40, "%d, %d\r\n", 100, 200);
+	cordic_write = (((uint32_t)((float)LL_TIM_GetCounter(TIM3) * 27.306666)) << 16) | (0x1 << 15);
+	snprintf(msg, 40, "%lu\r\n", cordic_read);
 	for (int i = 0; i < 40; i++) {
 		LL_USART_TransmitData8(USART2, msg[i]);
 		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2)) {
@@ -266,14 +267,14 @@ static void MX_ADC1_Init(void)
   */
 static void MX_CORDIC_Init(void)
 {
-
-  /* USER CODE BEGIN CORDIC_Init 0 */
   LL_CORDIC_SetFunction(CORDIC, LL_CORDIC_FUNCTION_COSINE);
   LL_CORDIC_SetPrecision(CORDIC, LL_CORDIC_PRECISION_4CYCLES);
   LL_CORDIC_SetNbWrite(CORDIC, LL_CORDIC_NBWRITE_1);
   LL_CORDIC_SetNbRead(CORDIC, LL_CORDIC_NBREAD_1);
   LL_CORDIC_SetInSize(CORDIC, LL_CORDIC_INSIZE_32BITS);
   LL_CORDIC_SetOutSize(CORDIC, LL_CORDIC_OUTSIZE_32BITS);
+
+  /* USER CODE BEGIN CORDIC_Init 0 */
   /* USER CODE END CORDIC_Init 0 */
 
   /* Peripheral clock enable */
@@ -292,7 +293,7 @@ static void MX_CORDIC_Init(void)
 
   LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PERIPH_NOINCREMENT);
 
-  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PERIPH_NOINCREMENT);
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MEMORY_NOINCREMENT);
 
   LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PDATAALIGN_WORD);
 
@@ -309,7 +310,7 @@ static void MX_CORDIC_Init(void)
 
   LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PERIPH_NOINCREMENT);
 
-  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PERIPH_NOINCREMENT);
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MEMORY_NOINCREMENT);
 
   LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PDATAALIGN_WORD);
 
@@ -317,18 +318,21 @@ static void MX_CORDIC_Init(void)
 
   /* USER CODE BEGIN CORDIC_Init 1 */
   LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, 1);
-  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_1, LL_CORDIC_DMA_GetRegAddr(CORDIC, LL_CORDIC_DMA_REG_DATA_OUT), &cordic_read, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_1, LL_CORDIC_DMA_GetRegAddr(CORDIC, LL_CORDIC_DMA_REG_DATA_OUT), (uint32_t)&cordic_read, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
 
   LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_2, 1);
-  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_2, LL_CORDIC_DMA_GetRegAddr(CORDIC, LL_CORDIC_DMA_REG_DATA_IN), &cordic_write, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_2, (uint32_t)&cordic_write, LL_CORDIC_DMA_GetRegAddr(CORDIC, LL_CORDIC_DMA_REG_DATA_IN), LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
   /* USER CODE END CORDIC_Init 1 */
 
   /* nothing else to be configured */
 
   /* USER CODE BEGIN CORDIC_Init 2 */
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_1);
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_2);
   LL_CORDIC_EnableDMAReq_RD(CORDIC);
   LL_CORDIC_EnableDMAReq_WR(CORDIC);
   /* USER CODE END CORDIC_Init 2 */
+
 }
 
 /**
@@ -393,6 +397,7 @@ static void MX_TIM3_Init(void)
   LL_TIM_DisableMasterSlaveMode(TIM3);
   /* USER CODE BEGIN TIM3_Init 2 */
 
+  LL_TIM_EnableCounter(TIM3);
   /* USER CODE END TIM3_Init 2 */
 
 }
