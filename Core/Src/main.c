@@ -54,6 +54,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_CORDIC_Init(void);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -99,6 +100,7 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM3_Init();
   MX_CORDIC_Init();
+
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -119,6 +121,17 @@ int main(void)
 	for (int i = 0; i < 40; i++) {
 		LL_USART_TransmitData8(USART2, msg[i]);
 		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2));
+  while (1)
+  {
+	LL_ADC_REG_StartConversion(ADC1);
+	while(LL_ADC_REG_IsConversionOngoing(ADC1)){
+
+	}
+	snprintf(msg, 40, "%d\r\n", LL_ADC_REG_ReadConversionData12(ADC1));
+	snprintf(msg, 40, "%d\r\n", LL_TIM_GetCounter(TIM3));
+	for (int i = 0; i < 40; i++) {
+		LL_USART_TransmitData8(USART2, msg[i]);
+		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2)); // Wait until transmission complete
 	}
 	LL_mDelay(100);
     /* USER CODE END WHILE */
@@ -258,7 +271,9 @@ static void MX_ADC1_Init(void)
   LL_ADC_SetChannelSamplingTime(ADC1, LL_ADC_CHANNEL_1, LL_ADC_SAMPLINGTIME_2CYCLES_5);
   LL_ADC_SetChannelSingleDiff(ADC1, LL_ADC_CHANNEL_1, LL_ADC_SINGLE_ENDED);
   /* USER CODE BEGIN ADC1_Init 2 */
-
+  LL_ADC_Enable(ADC1);
+  while (!LL_ADC_IsActiveFlag_ADRDY(ADC1)); // Wait until ADC ready
+  LL_ADC_ClearFlag_ADRDY(ADC1); // Clear ADC ready flag
   /* USER CODE END ADC1_Init 2 */
 
 }
@@ -389,6 +404,7 @@ static void MX_TIM3_Init(void)
   LL_TIM_Init(TIM3, &TIM_InitStruct);
   LL_TIM_DisableARRPreload(TIM3);
   LL_TIM_SetEncoderMode(TIM3, LL_TIM_ENCODERMODE_X4_TI12);
+
   LL_TIM_IC_SetActiveInput(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_ACTIVEINPUT_DIRECTTI);
   LL_TIM_IC_SetPrescaler(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_ICPSC_DIV1);
   LL_TIM_IC_SetFilter(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_IC_FILTER_FDIV1);
