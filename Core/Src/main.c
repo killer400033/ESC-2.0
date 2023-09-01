@@ -26,7 +26,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+extern void fixedToFloat(uint32_t *input1, float *input2);
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -42,22 +42,25 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint32_t cordic_write;
+uint32_t cordic_read;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_CORDIC_Init(void);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -92,9 +95,12 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_TIM3_Init();
+  MX_CORDIC_Init();
+
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -102,6 +108,19 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   char msg[40] = {0};
+  uint32_t input[2];
+  float output[2];
+  while (1)
+  {
+	cordic_write = ((uint32_t)((float)LL_TIM_GetCounter(TIM3) * 27.306666)) | 0x7FFF0000;
+
+	input[0] = cordic_read & 0xFFFF;
+	input[1] = cordic_read >> 16;
+	fixedToFloat(input, output);
+	snprintf(msg, 40, "sin: %f, cos: %f\r\n", output[0], output[1]);
+	for (int i = 0; i < 40; i++) {
+		LL_USART_TransmitData8(USART2, msg[i]);
+		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2));
   while (1)
   {
 	LL_ADC_REG_StartConversion(ADC1);
@@ -260,6 +279,82 @@ static void MX_ADC1_Init(void)
 }
 
 /**
+  * @brief CORDIC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CORDIC_Init(void)
+{
+
+  /* USER CODE BEGIN CORDIC_Init 0 */
+  /* USER CODE END CORDIC_Init 0 */
+
+  /* Peripheral clock enable */
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_CORDIC);
+
+  /* CORDIC DMA Init */
+
+  /* CORDIC_READ Init */
+  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_1, LL_DMAMUX_REQ_CORDIC_READ);
+
+  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_1, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+
+  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PRIORITY_LOW);
+
+  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MODE_CIRCULAR);
+
+  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PERIPH_NOINCREMENT);
+
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MEMORY_INCREMENT);
+
+  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PDATAALIGN_WORD);
+
+  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MDATAALIGN_WORD);
+
+  /* CORDIC_WRITE Init */
+  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_2, LL_DMAMUX_REQ_CORDIC_WRITE);
+
+  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_2, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+
+  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PRIORITY_LOW);
+
+  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MODE_CIRCULAR);
+
+  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PERIPH_NOINCREMENT);
+
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MEMORY_INCREMENT);
+
+  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PDATAALIGN_WORD);
+
+  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MDATAALIGN_WORD);
+
+  /* USER CODE BEGIN CORDIC_Init 1 */
+  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, 1);
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_1, LL_CORDIC_DMA_GetRegAddr(CORDIC, LL_CORDIC_DMA_REG_DATA_OUT), (uint32_t)&cordic_read, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+
+  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_2, 1);
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_2, (uint32_t)&cordic_write, LL_CORDIC_DMA_GetRegAddr(CORDIC, LL_CORDIC_DMA_REG_DATA_IN), LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+  /* USER CODE END CORDIC_Init 1 */
+
+  /* nothing else to be configured */
+
+  /* USER CODE BEGIN CORDIC_Init 2 */
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_1);
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_2);
+  LL_CORDIC_EnableDMAReq_RD(CORDIC);
+  LL_CORDIC_EnableDMAReq_WR(CORDIC);
+
+  LL_CORDIC_SetFunction(CORDIC, LL_CORDIC_FUNCTION_SINE);
+  LL_CORDIC_SetPrecision(CORDIC, LL_CORDIC_PRECISION_4CYCLES);
+  LL_CORDIC_SetNbWrite(CORDIC, LL_CORDIC_NBWRITE_1);
+  LL_CORDIC_SetNbRead(CORDIC, LL_CORDIC_NBREAD_1);
+  LL_CORDIC_SetInSize(CORDIC, LL_CORDIC_INSIZE_16BITS);
+  LL_CORDIC_SetOutSize(CORDIC, LL_CORDIC_OUTSIZE_16BITS);
+  /* USER CODE END CORDIC_Init 2 */
+
+}
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -308,7 +403,8 @@ static void MX_TIM3_Init(void)
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   LL_TIM_Init(TIM3, &TIM_InitStruct);
   LL_TIM_DisableARRPreload(TIM3);
-  LL_TIM_SetEncoderMode(TIM3, LL_TIM_ENCODERMODE_X2_TI1);
+  LL_TIM_SetEncoderMode(TIM3, LL_TIM_ENCODERMODE_X4_TI12);
+
   LL_TIM_IC_SetActiveInput(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_ACTIVEINPUT_DIRECTTI);
   LL_TIM_IC_SetPrescaler(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_ICPSC_DIV1);
   LL_TIM_IC_SetFilter(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_IC_FILTER_FDIV1);
@@ -320,6 +416,7 @@ static void MX_TIM3_Init(void)
   LL_TIM_SetTriggerOutput(TIM3, LL_TIM_TRGO_RESET);
   LL_TIM_DisableMasterSlaveMode(TIM3);
   /* USER CODE BEGIN TIM3_Init 2 */
+
   LL_TIM_EnableCounter(TIM3);
   /* USER CODE END TIM3_Init 2 */
 
@@ -397,6 +494,27 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* Init with LL driver */
+  /* DMA controller clock enable */
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMAMUX1);
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMA1);
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  NVIC_SetPriority(DMA1_Channel1_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+  NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* DMA1_Channel2_IRQn interrupt configuration */
+  NVIC_SetPriority(DMA1_Channel2_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+  NVIC_EnableIRQ(DMA1_Channel2_IRQn);
 
 }
 
