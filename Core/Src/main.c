@@ -26,7 +26,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+extern void fixedToFloat(uint32_t *input1, float *input2);
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -60,7 +60,6 @@ static void MX_CORDIC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -107,15 +106,19 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   char msg[40] = {0};
+  uint32_t input[2];
+  float output[2];
   while (1)
   {
-	cordic_write = (((uint32_t)((float)LL_TIM_GetCounter(TIM3) * 27.306666)) << 16) | (0x1 << 15);
-	snprintf(msg, 40, "%lu\r\n", cordic_read);
+	cordic_write = ((uint32_t)((float)LL_TIM_GetCounter(TIM3) * 27.306666)) | 0x7FFF0000;
+
+	input[0] = cordic_read & 0xFFFF;
+	input[1] = cordic_read >> 16;
+	fixedToFloat(input, output);
+	snprintf(msg, 40, "sin: %f, cos: %f\r\n", output[0], output[1]);
 	for (int i = 0; i < 40; i++) {
 		LL_USART_TransmitData8(USART2, msg[i]);
-		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2)) {
-			// wait
-		}
+		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2));
 	}
 	LL_mDelay(100);
     /* USER CODE END WHILE */
@@ -267,12 +270,6 @@ static void MX_ADC1_Init(void)
   */
 static void MX_CORDIC_Init(void)
 {
-  LL_CORDIC_SetFunction(CORDIC, LL_CORDIC_FUNCTION_COSINE);
-  LL_CORDIC_SetPrecision(CORDIC, LL_CORDIC_PRECISION_4CYCLES);
-  LL_CORDIC_SetNbWrite(CORDIC, LL_CORDIC_NBWRITE_1);
-  LL_CORDIC_SetNbRead(CORDIC, LL_CORDIC_NBREAD_1);
-  LL_CORDIC_SetInSize(CORDIC, LL_CORDIC_INSIZE_32BITS);
-  LL_CORDIC_SetOutSize(CORDIC, LL_CORDIC_OUTSIZE_32BITS);
 
   /* USER CODE BEGIN CORDIC_Init 0 */
   /* USER CODE END CORDIC_Init 0 */
@@ -293,7 +290,7 @@ static void MX_CORDIC_Init(void)
 
   LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PERIPH_NOINCREMENT);
 
-  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MEMORY_NOINCREMENT);
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MEMORY_INCREMENT);
 
   LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PDATAALIGN_WORD);
 
@@ -310,7 +307,7 @@ static void MX_CORDIC_Init(void)
 
   LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PERIPH_NOINCREMENT);
 
-  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MEMORY_NOINCREMENT);
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MEMORY_INCREMENT);
 
   LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PDATAALIGN_WORD);
 
@@ -331,6 +328,13 @@ static void MX_CORDIC_Init(void)
   LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_2);
   LL_CORDIC_EnableDMAReq_RD(CORDIC);
   LL_CORDIC_EnableDMAReq_WR(CORDIC);
+
+  LL_CORDIC_SetFunction(CORDIC, LL_CORDIC_FUNCTION_SINE);
+  LL_CORDIC_SetPrecision(CORDIC, LL_CORDIC_PRECISION_4CYCLES);
+  LL_CORDIC_SetNbWrite(CORDIC, LL_CORDIC_NBWRITE_1);
+  LL_CORDIC_SetNbRead(CORDIC, LL_CORDIC_NBREAD_1);
+  LL_CORDIC_SetInSize(CORDIC, LL_CORDIC_INSIZE_16BITS);
+  LL_CORDIC_SetOutSize(CORDIC, LL_CORDIC_OUTSIZE_16BITS);
   /* USER CODE END CORDIC_Init 2 */
 
 }
@@ -384,7 +388,7 @@ static void MX_TIM3_Init(void)
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   LL_TIM_Init(TIM3, &TIM_InitStruct);
   LL_TIM_DisableARRPreload(TIM3);
-  LL_TIM_SetEncoderMode(TIM3, LL_TIM_ENCODERMODE_X2_TI1);
+  LL_TIM_SetEncoderMode(TIM3, LL_TIM_ENCODERMODE_X4_TI12);
   LL_TIM_IC_SetActiveInput(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_ACTIVEINPUT_DIRECTTI);
   LL_TIM_IC_SetPrescaler(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_ICPSC_DIV1);
   LL_TIM_IC_SetFilter(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_IC_FILTER_FDIV1);
