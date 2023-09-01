@@ -104,12 +104,15 @@ int main(void)
   char msg[40] = {0};
   while (1)
   {
+	LL_ADC_REG_StartConversion(ADC1);
+	while(LL_ADC_REG_IsConversionOngoing(ADC1)){
+
+	}
+	snprintf(msg, 40, "%d\r\n", LL_ADC_REG_ReadConversionData12(ADC1));
 	snprintf(msg, 40, "%d\r\n", LL_TIM_GetCounter(TIM3));
 	for (int i = 0; i < 40; i++) {
 		LL_USART_TransmitData8(USART2, msg[i]);
-		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2)) {
-			// wait
-		}
+		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2)); // Wait until transmission complete
 	}
 	LL_mDelay(100);
     /* USER CODE END WHILE */
@@ -249,7 +252,9 @@ static void MX_ADC1_Init(void)
   LL_ADC_SetChannelSamplingTime(ADC1, LL_ADC_CHANNEL_1, LL_ADC_SAMPLINGTIME_2CYCLES_5);
   LL_ADC_SetChannelSingleDiff(ADC1, LL_ADC_CHANNEL_1, LL_ADC_SINGLE_ENDED);
   /* USER CODE BEGIN ADC1_Init 2 */
-
+  LL_ADC_Enable(ADC1);
+  while (!LL_ADC_IsActiveFlag_ADRDY(ADC1)); // Wait until ADC ready
+  LL_ADC_ClearFlag_ADRDY(ADC1); // Clear ADC ready flag
   /* USER CODE END ADC1_Init 2 */
 
 }
