@@ -106,7 +106,9 @@ int main(void)
   MX_OPAMP3_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-
+  #define SQRT3ON2 0.86602540378
+  // This scales _va and _vb by 1/sqrt(3) such that when |[vq, vd]| = 1, the SVM is saturated
+  #define SVM_COMPEN 0.57735026919
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -114,6 +116,20 @@ int main(void)
   char msg[80] = {0};
   uint32_t input[2];
   float output[2];
+  uint32_t temp[2];
+
+  float _vq = 1;
+  float _vd = 0;
+  float _va;
+  float _vb;
+  float _v1;
+  float _v2;
+  float _v3;
+  float _max;
+  float _min;
+  float _mid;
+
+  // PWM Timer Setup
   LL_TIM_EnableCounter(TIM1);
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1);
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1N);
@@ -125,18 +141,56 @@ int main(void)
   LL_TIM_EnableAllOutputs(TIM1);
   while (1)
   {
-	// Example Timer code
-	LL_TIM_OC_SetCompareCH1(TIM1, 1000);
-	LL_TIM_OC_SetCompareCH2(TIM1, 1000);
-	LL_TIM_OC_SetCompareCH3(TIM1, 1000);
-
-
 	// Example CORDIC unit + DMA code
-	uint32_t temp[2];
 	cordic_write = ((uint32_t)((float)LL_TIM_GetCounter(TIM3) * 27.306666)) | 0x7FFF0000;
 	input[0] = cordic_read & 0xFFFF;
 	input[1] = cordic_read >> 16;
 	fixedToFloat(input, output);
+
+	// Example Timer code
+
+	// Inverse Park Transform (q axis aligns with d axis)
+	_va = output[1] * _vd - output[0] * _vq;
+	_vb = output[0] * _vd - output[1] * _vq;
+
+	// Inverse Clarke Transform
+	_v1 = _va * SVM_COMPEN;
+	_v2 = (-_va*0.5 + _vb*SQRT3ON2) * SVM_COMPEN;
+	_v3 = (-_va*0.5 - _vb*SQRT3ON2) * SVM_COMPEN;
+
+	// Space Vector Modulation
+	// Finds the min and max value in v1, v2, v3
+	if (_v1 > _v2) {
+		_min = _v2;
+		_max = _v1;
+	}
+	else {
+		_min = _v1;
+		_max = _v2;
+	}
+
+	if (_v3 > _max) {
+		_max = _v3;
+	}
+	else if (_v3 < _min) {
+		_min = _v3;
+	}
+
+	// Converts the sinusoidal waveform into SVM between 0 and 1
+	_mid = (_min + _max) / 2.0;
+	_v1 += 0.5 - _mid;
+	_v2 += 0.5 - _mid;
+	_v3 += 0.5 - _mid;
+
+	// Clamp v1, v2, v3 between 0 to 1. This automatically applies Overmodulation to a trapezoidal waveform
+	_v1 = (_v1 < 0) ? 0 : ((_v1 > 1) ? 1 : _v1);
+	_v2 = (_v2 < 0) ? 0 : ((_v2 > 1) ? 1 : _v2);
+	_v3 = (_v3 < 0) ? 0 : ((_v3 > 1) ? 1 : _v3);
+
+	float pwm_period = (float)TIM1->ARR;
+	LL_TIM_OC_SetCompareCH1(TIM1, pwm_period*_v1);
+	LL_TIM_OC_SetCompareCH2(TIM1, pwm_period*_v2);
+	LL_TIM_OC_SetCompareCH3(TIM1, pwm_period*_v3);
 
 	// Example ADC read code
 	LL_ADC_REG_StartConversion(ADC2);
@@ -149,7 +203,7 @@ int main(void)
 
 
 	// Debugging and Serial Printing Stuff
-	snprintf(msg, 80, "sin: %f, cos: %f, ADC: %d - %d\r\n", output[0], output[1], temp[0], temp[1]);
+	snprintf(msg, 80, "sin: %f, cos: %f, ADC: %lu - %lu\r\n", _v1, _v2, temp[0], temp[1]);
 
 	for (int i = 0; i < 80; i++) {
 		LL_USART_TransmitData8(USART2, msg[i]);
@@ -480,8 +534,8 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   TIM_InitStruct.Prescaler = 0;
-  TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
-  TIM_InitStruct.Autoreload = 8500;
+  TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_CENTER_DOWN;
+  TIM_InitStruct.Autoreload = 4250;
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   TIM_InitStruct.RepetitionCounter = 0;
   LL_TIM_Init(TIM1, &TIM_InitStruct);
