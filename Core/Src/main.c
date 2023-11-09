@@ -51,10 +51,11 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_CORDIC_Init(void);
-
+static void MX_ADC2_Init(void);
+static void MX_OPAMP2_Init(void);
+static void MX_OPAMP3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -97,41 +98,40 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART2_UART_Init();
-  MX_ADC1_Init();
   MX_TIM3_Init();
   MX_CORDIC_Init();
-
+  MX_ADC2_Init();
+  MX_OPAMP2_Init();
+  MX_OPAMP3_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  char msg[40] = {0};
+  char msg[80] = {0};
   uint32_t input[2];
   float output[2];
   while (1)
   {
+	uint32_t temp[2];
+	LL_ADC_REG_StartConversion(ADC2);
 	cordic_write = ((uint32_t)((float)LL_TIM_GetCounter(TIM3) * 27.306666)) | 0x7FFF0000;
+	while(!LL_ADC_IsActiveFlag_EOC(ADC2));
+	temp[0] = LL_ADC_REG_ReadConversionData12(ADC2);
+
+	while(!LL_ADC_IsActiveFlag_EOC(ADC2));
+	temp[1] = LL_ADC_REG_ReadConversionData12(ADC2);
+	LL_ADC_ClearFlag_EOC(ADC2);
 
 	input[0] = cordic_read & 0xFFFF;
 	input[1] = cordic_read >> 16;
 	fixedToFloat(input, output);
-	snprintf(msg, 40, "sin: %f, cos: %f\r\n", output[0], output[1]);
-	for (int i = 0; i < 40; i++) {
+	snprintf(msg, 80, "sin: %f, cos: %f, ADC: %d - %d\r\n", output[0], output[1], temp[0], temp[1]);
+
+	for (int i = 0; i < 80; i++) {
 		LL_USART_TransmitData8(USART2, msg[i]);
 		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2));
-  while (1)
-  {
-	LL_ADC_REG_StartConversion(ADC1);
-	while(LL_ADC_REG_IsConversionOngoing(ADC1)){
-
-	}
-	snprintf(msg, 40, "%d\r\n", LL_ADC_REG_ReadConversionData12(ADC1));
-	snprintf(msg, 40, "%d\r\n", LL_TIM_GetCounter(TIM3));
-	for (int i = 0; i < 40; i++) {
-		LL_USART_TransmitData8(USART2, msg[i]);
-		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2)); // Wait until transmission complete
 	}
 	LL_mDelay(100);
     /* USER CODE END WHILE */
@@ -188,70 +188,57 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief ADC1 Initialization Function
+  * @brief ADC2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_ADC1_Init(void)
+static void MX_ADC2_Init(void)
 {
 
-  /* USER CODE BEGIN ADC1_Init 0 */
+  /* USER CODE BEGIN ADC2_Init 0 */
 
-  /* USER CODE END ADC1_Init 0 */
+  /* USER CODE END ADC2_Init 0 */
 
   LL_ADC_InitTypeDef ADC_InitStruct = {0};
   LL_ADC_REG_InitTypeDef ADC_REG_InitStruct = {0};
   LL_ADC_CommonInitTypeDef ADC_CommonInitStruct = {0};
-
-  LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+  LL_ADC_INJ_InitTypeDef ADC_INJ_InitStruct = {0};
 
   LL_RCC_SetADCClockSource(LL_RCC_ADC12_CLKSOURCE_SYSCLK);
 
   /* Peripheral clock enable */
   LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_ADC12);
 
-  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
-  /**ADC1 GPIO Configuration
-  PA0   ------> ADC1_IN1
-  PA1   ------> ADC1_IN2
-  */
-  GPIO_InitStruct.Pin = LL_GPIO_PIN_0;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /* USER CODE BEGIN ADC2_Init 1 */
 
-  GPIO_InitStruct.Pin = LL_GPIO_PIN_1;
-  GPIO_InitStruct.Mode = LL_GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /* USER CODE BEGIN ADC1_Init 1 */
-
-  /* USER CODE END ADC1_Init 1 */
+  /* USER CODE END ADC2_Init 1 */
 
   /** Common config
   */
   ADC_InitStruct.Resolution = LL_ADC_RESOLUTION_12B;
   ADC_InitStruct.DataAlignment = LL_ADC_DATA_ALIGN_RIGHT;
   ADC_InitStruct.LowPowerMode = LL_ADC_LP_MODE_NONE;
-  LL_ADC_Init(ADC1, &ADC_InitStruct);
+  LL_ADC_Init(ADC2, &ADC_InitStruct);
   ADC_REG_InitStruct.TriggerSource = LL_ADC_REG_TRIG_SOFTWARE;
-  ADC_REG_InitStruct.SequencerLength = LL_ADC_REG_SEQ_SCAN_DISABLE;
+  ADC_REG_InitStruct.SequencerLength = LL_ADC_REG_SEQ_SCAN_ENABLE_2RANKS;
   ADC_REG_InitStruct.SequencerDiscont = LL_ADC_REG_SEQ_DISCONT_DISABLE;
   ADC_REG_InitStruct.ContinuousMode = LL_ADC_REG_CONV_SINGLE;
   ADC_REG_InitStruct.DMATransfer = LL_ADC_REG_DMA_TRANSFER_NONE;
   ADC_REG_InitStruct.Overrun = LL_ADC_REG_OVR_DATA_PRESERVED;
-  LL_ADC_REG_Init(ADC1, &ADC_REG_InitStruct);
-  LL_ADC_SetGainCompensation(ADC1, 0);
-  LL_ADC_SetOverSamplingScope(ADC1, LL_ADC_OVS_DISABLE);
+  LL_ADC_REG_Init(ADC2, &ADC_REG_InitStruct);
+  LL_ADC_SetGainCompensation(ADC2, 0);
+  LL_ADC_SetOverSamplingScope(ADC2, LL_ADC_OVS_DISABLE);
   ADC_CommonInitStruct.CommonClock = LL_ADC_CLOCK_SYNC_PCLK_DIV4;
-  ADC_CommonInitStruct.Multimode = LL_ADC_MULTI_INDEPENDENT;
-  LL_ADC_CommonInit(__LL_ADC_COMMON_INSTANCE(ADC1), &ADC_CommonInitStruct);
+  LL_ADC_CommonInit(__LL_ADC_COMMON_INSTANCE(ADC2), &ADC_CommonInitStruct);
+  ADC_INJ_InitStruct.SequencerLength = 0;
+  ADC_INJ_InitStruct.SequencerDiscont = LL_ADC_INJ_SEQ_DISCONT_DISABLE;
+  ADC_INJ_InitStruct.TrigAuto = LL_ADC_INJ_TRIG_INDEPENDENT;
+  LL_ADC_INJ_Init(ADC2, &ADC_INJ_InitStruct);
 
   /* Disable ADC deep power down (enabled by default after reset state) */
-  LL_ADC_DisableDeepPowerDown(ADC1);
+  LL_ADC_DisableDeepPowerDown(ADC2);
   /* Enable ADC internal voltage regulator */
-  LL_ADC_EnableInternalRegulator(ADC1);
+  LL_ADC_EnableInternalRegulator(ADC2);
   /* Delay for ADC internal voltage regulator stabilization. */
   /* Compute number of CPU cycles to wait for, from delay in us. */
   /* Note: Variable divided by 2 to compensate partially */
@@ -267,14 +254,20 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_1, LL_ADC_CHANNEL_1);
-  LL_ADC_SetChannelSamplingTime(ADC1, LL_ADC_CHANNEL_1, LL_ADC_SAMPLINGTIME_2CYCLES_5);
-  LL_ADC_SetChannelSingleDiff(ADC1, LL_ADC_CHANNEL_1, LL_ADC_SINGLE_ENDED);
-  /* USER CODE BEGIN ADC1_Init 2 */
-  LL_ADC_Enable(ADC1);
-  while (!LL_ADC_IsActiveFlag_ADRDY(ADC1)); // Wait until ADC ready
-  LL_ADC_ClearFlag_ADRDY(ADC1); // Clear ADC ready flag
-  /* USER CODE END ADC1_Init 2 */
+  LL_ADC_REG_SetSequencerRanks(ADC2, LL_ADC_REG_RANK_1, LL_ADC_CHANNEL_VOPAMP2);
+  LL_ADC_SetChannelSamplingTime(ADC2, LL_ADC_CHANNEL_VOPAMP2, LL_ADC_SAMPLINGTIME_2CYCLES_5);
+  LL_ADC_SetChannelSingleDiff(ADC2, LL_ADC_CHANNEL_VOPAMP2, LL_ADC_SINGLE_ENDED);
+
+  /** Configure Regular Channel
+  */
+  LL_ADC_REG_SetSequencerRanks(ADC2, LL_ADC_REG_RANK_2, LL_ADC_CHANNEL_VOPAMP3_ADC2);
+  LL_ADC_SetChannelSamplingTime(ADC2, LL_ADC_CHANNEL_VOPAMP3_ADC2, LL_ADC_SAMPLINGTIME_2CYCLES_5);
+  LL_ADC_SetChannelSingleDiff(ADC2, LL_ADC_CHANNEL_VOPAMP3_ADC2, LL_ADC_SINGLE_ENDED);
+  /* USER CODE BEGIN ADC2_Init 2 */
+  LL_ADC_Enable(ADC2);
+  while (!LL_ADC_IsActiveFlag_ADRDY(ADC2)); // Wait until ADC ready
+  LL_ADC_ClearFlag_ADRDY(ADC2); // Clear ADC ready flag
+  /* USER CODE END ADC2_Init 2 */
 
 }
 
@@ -355,6 +348,92 @@ static void MX_CORDIC_Init(void)
 }
 
 /**
+  * @brief OPAMP2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_OPAMP2_Init(void)
+{
+
+  /* USER CODE BEGIN OPAMP2_Init 0 */
+
+  /* USER CODE END OPAMP2_Init 0 */
+
+  LL_OPAMP_InitTypeDef OPAMP_InitStruct = {0};
+
+  LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
+  /**OPAMP2 GPIO Configuration
+  PA7   ------> OPAMP2_VINP
+  */
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_7;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN OPAMP2_Init 1 */
+
+  /* USER CODE END OPAMP2_Init 1 */
+  OPAMP_InitStruct.PowerMode = LL_OPAMP_POWERMODE_HIGHSPEED;
+  OPAMP_InitStruct.FunctionalMode = LL_OPAMP_MODE_PGA;
+  OPAMP_InitStruct.InputNonInverting = LL_OPAMP_INPUT_NONINVERT_IO0;
+  OPAMP_InitStruct.InputInverting = LL_OPAMP_INPUT_INVERT_CONNECT_NO;
+  LL_OPAMP_Init(OPAMP2, &OPAMP_InitStruct);
+  LL_OPAMP_SetInputsMuxMode(OPAMP2, LL_OPAMP_INPUT_MUX_DISABLE);
+  LL_OPAMP_SetInternalOutput(OPAMP2, LL_OPAMP_INTERNAL_OUPUT_ENABLED);
+  LL_OPAMP_SetPGAGain(OPAMP2, LL_OPAMP_PGA_GAIN_2_OR_MINUS_1);
+  LL_OPAMP_SetTrimmingMode(OPAMP2, LL_OPAMP_TRIMMING_FACTORY);
+  /* USER CODE BEGIN OPAMP2_Init 2 */
+  LL_OPAMP_Enable(OPAMP2);
+  /* USER CODE END OPAMP2_Init 2 */
+
+}
+
+/**
+  * @brief OPAMP3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_OPAMP3_Init(void)
+{
+
+  /* USER CODE BEGIN OPAMP3_Init 0 */
+
+  /* USER CODE END OPAMP3_Init 0 */
+
+  LL_OPAMP_InitTypeDef OPAMP_InitStruct = {0};
+
+  LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
+  /**OPAMP3 GPIO Configuration
+  PB0   ------> OPAMP3_VINP
+  */
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_0;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+  LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN OPAMP3_Init 1 */
+
+  /* USER CODE END OPAMP3_Init 1 */
+  OPAMP_InitStruct.PowerMode = LL_OPAMP_POWERMODE_HIGHSPEED;
+  OPAMP_InitStruct.FunctionalMode = LL_OPAMP_MODE_PGA;
+  OPAMP_InitStruct.InputNonInverting = LL_OPAMP_INPUT_NONINVERT_IO0;
+  OPAMP_InitStruct.InputInverting = LL_OPAMP_INPUT_INVERT_CONNECT_NO;
+  LL_OPAMP_Init(OPAMP3, &OPAMP_InitStruct);
+  LL_OPAMP_SetInputsMuxMode(OPAMP3, LL_OPAMP_INPUT_MUX_DISABLE);
+  LL_OPAMP_SetInternalOutput(OPAMP3, LL_OPAMP_INTERNAL_OUPUT_ENABLED);
+  LL_OPAMP_SetPGAGain(OPAMP3, LL_OPAMP_PGA_GAIN_2_OR_MINUS_1);
+  LL_OPAMP_SetTrimmingMode(OPAMP3, LL_OPAMP_TRIMMING_FACTORY);
+  /* USER CODE BEGIN OPAMP3_Init 2 */
+  LL_OPAMP_Enable(OPAMP3);
+  /* USER CODE END OPAMP3_Init 2 */
+
+}
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -404,7 +483,6 @@ static void MX_TIM3_Init(void)
   LL_TIM_Init(TIM3, &TIM_InitStruct);
   LL_TIM_DisableARRPreload(TIM3);
   LL_TIM_SetEncoderMode(TIM3, LL_TIM_ENCODERMODE_X4_TI12);
-
   LL_TIM_IC_SetActiveInput(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_ACTIVEINPUT_DIRECTTI);
   LL_TIM_IC_SetPrescaler(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_ICPSC_DIV1);
   LL_TIM_IC_SetFilter(TIM3, LL_TIM_CHANNEL_CH1, LL_TIM_IC_FILTER_FDIV1);
