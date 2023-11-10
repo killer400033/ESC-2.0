@@ -148,7 +148,7 @@ int main(void)
   while (1)
   {
 	// Example CORDIC unit + DMA code
-	cordic_write = ((uint32_t)((float)LL_TIM_GetCounter(TIM3) * ENCODER_TO_ANGLE)) | 0x7FFF0000;
+	cordic_write = ((uint32_t)(((float)(LL_TIM_GetCounter(TIM3) % MAGNETIC_AGL_ENCODER_CNT)) * ENCODER_TO_ANGLE)) | 0x7FFF0000;
 	input[0] = cordic_read & 0xFFFF;
 	input[1] = cordic_read >> 16;
 	fixedToFloat(input, output);
@@ -704,7 +704,7 @@ static void MX_TIM3_Init(void)
   LL_TIM_SetTriggerOutput(TIM3, LL_TIM_TRGO_RESET);
   LL_TIM_DisableMasterSlaveMode(TIM3);
   /* USER CODE BEGIN TIM3_Init 2 */
-  TIM3->ARR = MAGNETIC_AGL_ENCODER_CNT - 1;
+  TIM3->ARR = ENCODER_RES - 1;
   LL_TIM_EnableCounter(TIM3);
   /* USER CODE END TIM3_Init 2 */
 

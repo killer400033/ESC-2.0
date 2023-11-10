@@ -83,8 +83,6 @@ void Error_Handler(void);
 #define T_SWDIO_GPIO_Port GPIOA
 #define T_SWCLK_Pin LL_GPIO_PIN_14
 #define T_SWCLK_GPIO_Port GPIOA
-#define T_SWO_Pin LL_GPIO_PIN_3
-#define T_SWO_GPIO_Port GPIOB
 #define LD2_Pin LL_GPIO_PIN_8
 #define LD2_GPIO_Port GPIOB
 #ifndef NVIC_PRIORITYGROUP_0
