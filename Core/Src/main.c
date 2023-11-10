@@ -107,8 +107,13 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   #define SQRT3ON2 0.86602540378
-  // This scales _va and _vb by 1/sqrt(3) such that when |[vq, vd]| = 1, the SVM is saturated
+  // This scales _va and _vb by 1/sqrt(3) such that when |(vq, vd)| = 1, the SVM is saturated
   #define SVM_COMPEN 0.57735026919
+  #define POLE_CNT 4
+  #define ENCODER_RES 2400
+  #define MAGNETIC_AGL_ENCODER_CNT (ENCODER_RES * 2 / POLE_CNT)
+  #define ENCODER_TO_ANGLE (65536.0/(float)MAGNETIC_AGL_ENCODER_CNT)
+  #define PWM_PERIOD 4250
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -118,7 +123,7 @@ int main(void)
   float output[2];
   uint32_t temp[2];
 
-  float _vq = 1;
+  float _vq = 0.2;
   float _vd = 0;
   float _va;
   float _vb;
@@ -130,6 +135,7 @@ int main(void)
   float _mid;
 
   // PWM Timer Setup
+  TIM1->ARR = PWM_PERIOD;
   LL_TIM_EnableCounter(TIM1);
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1);
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1N);
@@ -142,7 +148,7 @@ int main(void)
   while (1)
   {
 	// Example CORDIC unit + DMA code
-	cordic_write = ((uint32_t)((float)LL_TIM_GetCounter(TIM3) * 27.306666)) | 0x7FFF0000;
+	cordic_write = ((uint32_t)((float)LL_TIM_GetCounter(TIM3) * ENCODER_TO_ANGLE)) | 0x7FFF0000;
 	input[0] = cordic_read & 0xFFFF;
 	input[1] = cordic_read >> 16;
 	fixedToFloat(input, output);
@@ -187,10 +193,9 @@ int main(void)
 	_v2 = (_v2 < 0) ? 0 : ((_v2 > 1) ? 1 : _v2);
 	_v3 = (_v3 < 0) ? 0 : ((_v3 > 1) ? 1 : _v3);
 
-	float pwm_period = (float)TIM1->ARR;
-	LL_TIM_OC_SetCompareCH1(TIM1, pwm_period*_v1);
-	LL_TIM_OC_SetCompareCH2(TIM1, pwm_period*_v2);
-	LL_TIM_OC_SetCompareCH3(TIM1, pwm_period*_v3);
+	LL_TIM_OC_SetCompareCH1(TIM1, (float)PWM_PERIOD*_v1);
+	LL_TIM_OC_SetCompareCH2(TIM1, (float)PWM_PERIOD*_v2);
+	LL_TIM_OC_SetCompareCH3(TIM1, (float)PWM_PERIOD*_v3);
 
 	// Example ADC read code
 	LL_ADC_REG_StartConversion(ADC2);
@@ -203,13 +208,15 @@ int main(void)
 
 
 	// Debugging and Serial Printing Stuff
-	snprintf(msg, 80, "sin: %f, cos: %f, ADC: %lu - %lu\r\n", _v1, _v2, temp[0], temp[1]);
+	/*
+	snprintf(msg, 80, "sin: %f, cos: %f, ADC: %lu - %lu\r\n", ENCODER_TO_ANGLE, output[1], temp[0], temp[1]);
 
 	for (int i = 0; i < 80; i++) {
 		LL_USART_TransmitData8(USART2, msg[i]);
 		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2));
 	}
 	LL_mDelay(100);
+	*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -535,7 +542,7 @@ static void MX_TIM1_Init(void)
   /* USER CODE END TIM1_Init 1 */
   TIM_InitStruct.Prescaler = 0;
   TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_CENTER_DOWN;
-  TIM_InitStruct.Autoreload = 4250;
+  TIM_InitStruct.Autoreload = 0;
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   TIM_InitStruct.RepetitionCounter = 0;
   LL_TIM_Init(TIM1, &TIM_InitStruct);
@@ -560,11 +567,10 @@ static void MX_TIM1_Init(void)
   LL_TIM_SetTriggerOutput(TIM1, LL_TIM_TRGO_RESET);
   LL_TIM_SetTriggerOutput2(TIM1, LL_TIM_TRGO2_RESET);
   LL_TIM_DisableMasterSlaveMode(TIM1);
-  LL_TIM_EnableDeadTimePreload(TIM1);
   TIM_BDTRInitStruct.OSSRState = LL_TIM_OSSR_DISABLE;
   TIM_BDTRInitStruct.OSSIState = LL_TIM_OSSI_DISABLE;
   TIM_BDTRInitStruct.LockLevel = LL_TIM_LOCKLEVEL_OFF;
-  TIM_BDTRInitStruct.DeadTime = 50;
+  TIM_BDTRInitStruct.DeadTime = 200;
   TIM_BDTRInitStruct.BreakState = LL_TIM_BREAK_DISABLE;
   TIM_BDTRInitStruct.BreakPolarity = LL_TIM_BREAK_POLARITY_HIGH;
   TIM_BDTRInitStruct.BreakFilter = LL_TIM_BREAK_FILTER_FDIV1;
@@ -682,7 +688,7 @@ static void MX_TIM3_Init(void)
   /* USER CODE END TIM3_Init 1 */
   TIM_InitStruct.Prescaler = 0;
   TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
-  TIM_InitStruct.Autoreload = 2399;
+  TIM_InitStruct.Autoreload = 0;
   TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
   LL_TIM_Init(TIM3, &TIM_InitStruct);
   LL_TIM_DisableARRPreload(TIM3);
@@ -698,7 +704,7 @@ static void MX_TIM3_Init(void)
   LL_TIM_SetTriggerOutput(TIM3, LL_TIM_TRGO_RESET);
   LL_TIM_DisableMasterSlaveMode(TIM3);
   /* USER CODE BEGIN TIM3_Init 2 */
-
+  TIM3->ARR = MAGNETIC_AGL_ENCODER_CNT - 1;
   LL_TIM_EnableCounter(TIM3);
   /* USER CODE END TIM3_Init 2 */
 
