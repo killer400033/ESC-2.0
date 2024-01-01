@@ -133,6 +133,8 @@ int main(void)
   LL_ADC_REG_StartConversion(ADC1);
   LL_ADC_REG_StartConversion(ADC2);
 
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_5);
+
   mainLoop();
 
   while (1)
@@ -594,7 +596,7 @@ static void MX_TIM1_Init(void)
 
   LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_5, LL_DMA_PERIPH_NOINCREMENT);
 
-  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_5, LL_DMA_MEMORY_INCREMENT);
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_5, LL_DMA_MEMORY_NOINCREMENT);
 
   LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_5, LL_DMA_PDATAALIGN_HALFWORD);
 
@@ -602,8 +604,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE BEGIN TIM1_Init 1 */
   LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_5, 1);
-  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_5, (uint32_t)&(TIM1->CNT), (uint32_t)&_saved_state.encoder_out, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
-  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_5);
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_5, (uint32_t)&(TIM3->CNT), (uint32_t)&_saved_state.encoder_out, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
   /* USER CODE END TIM1_Init 1 */
   TIM_InitStruct.Prescaler = 0;
   TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_CENTER_DOWN;

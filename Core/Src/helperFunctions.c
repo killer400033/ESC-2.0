@@ -99,7 +99,7 @@ void calculateSVM(float _vq, float _vd) {
 }
 
 void printData(void) {
-	snprintf(_msg, 80, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu\r\n", saved_state.encoder_out, saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt);
+	snprintf(_msg, 80, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu\r\n", LL_TIM_GetCounter(TIM3), saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt);
   LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_1);
   LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, 80);
   LL_DMA_ClearFlag_TC1(DMA1);
