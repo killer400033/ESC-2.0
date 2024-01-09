@@ -25,7 +25,7 @@ float set_id = 0;
 // Function Declarations
 void calculateSVM(float _vq, float _vd);
 void printData(void);
-void prePIDCalc(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d);
+void doPIDLoop(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d);
 float calculatePID(PIDState *prev_state, float curr_error, float time);
 
 void mainLoop(void) {
@@ -40,7 +40,7 @@ void mainLoop(void) {
   	calculateSVM(_vq, _vd);
 
   	if (pid_loop_overrun) {
-  		prePIDCalc(&_vq, &_vd, &prev_q, &prev_d);
+  		doPIDLoop(&_vq, &_vd, &prev_q, &prev_d);
   		pid_loop_overrun--;
   	}
     // USART printing
@@ -50,7 +50,7 @@ void mainLoop(void) {
   }
 }
 
-void prePIDCalc(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d) {
+void doPIDLoop(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d) {
 	float _ia;
 	float _ib;
 	float _i1;
@@ -60,7 +60,7 @@ void prePIDCalc(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d) {
 	float _id;
 	float time;
 
-	TrigState curr_saved_state = saved_state; // Make sure saved_state doesn't change through loop
+	TrigState curr_saved_state = saved_state; // This makes sure saved_state doesn't change through loop
 	curr_cycle_cnt -= curr_saved_state.cycle_cnt; // Make sure PID frequency is atleast 2x slower than PWM frequency
 	uint32_t raw_output[2];
 	float trig_output[2];
@@ -177,8 +177,7 @@ void calculateSVM(float _vq, float _vd) {
 }
 
 void printData(void) {
-	//snprintf(_msg, 100, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu\r\n", LL_TIM_GetCounter(TIM3), saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt);
-	snprintf(_msg, 5, "%lu\r\n", pid_loop_overrun);
+	snprintf(_msg, 100, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu, Overrun: %lu\r\n", LL_TIM_GetCounter(TIM3), saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt, pid_loop_overrun);
   LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_1);
   LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, 100);
   LL_DMA_ClearFlag_TC1(DMA1);

@@ -128,7 +128,7 @@ int main(void)
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH3N);
   // Channel 4 used to trigger ADC
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH4);
-  LL_TIM_OC_SetCompareCH4(TIM1, 0);
+  LL_TIM_OC_SetCompareCH4(TIM1, PWM_PERIOD);
 
   LL_TIM_EnableAllOutputs(TIM1);
 
