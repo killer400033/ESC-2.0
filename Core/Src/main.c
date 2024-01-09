@@ -21,9 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "dmaVariables.h"
-#include "helperFunctions.h"
 #include "constants.h"
+#include "globalVariables.h"
+#include "motorControl.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

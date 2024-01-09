@@ -26,7 +26,8 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
-#include "dmaVariables.h"
+
+#include "globalVariables.h"
 /* USER CODE END TD */
 
 /* Private define ------------------------------------------------------------*/
@@ -263,9 +264,10 @@ void ADC1_2_IRQHandler(void)
   /* USER CODE END ADC1_2_IRQn 0 */
 
   /* USER CODE BEGIN ADC1_2_IRQn 1 */
-	// Move value into "shadow" variable
+	// Move value from "shadow register"
 	saved_state = _saved_state;
 	saved_state.cycle_cnt = curr_cycle_cnt;
+	saved_state.adc_read_map = curr_adc_read_map;
 	curr_cycle_cnt++;
 	LL_ADC_ClearFlag_EOS(ADC2);
   /* USER CODE END ADC1_2_IRQn 1 */
