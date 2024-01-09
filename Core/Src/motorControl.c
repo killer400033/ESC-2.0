@@ -17,7 +17,6 @@ typedef struct PIDState {
 
 float _P = 1.0;
 float _I = 1.0;
-float _D = 1.0;
 
 float set_iq = 1.0;
 float set_id = 0;
@@ -36,13 +35,15 @@ void mainLoop(void) {
 	// Main Running Loop
   while (1) {
 
-  	// Running Motor Loop
+  	// Updating Motor Output
   	calculateSVM(_vq, _vd);
 
+  	// Analyzing Motor Inputs
   	if (pid_loop_overrun) {
   		doPIDLoop(&_vq, &_vd, &prev_q, &prev_d);
   		pid_loop_overrun--;
   	}
+
     // USART printing
     if (LL_DMA_IsActiveFlag_TC1(DMA1) && printPending) {
     	printData();
@@ -144,20 +145,20 @@ void calculateSVM(float _vq, float _vd) {
 	if (_v1 > _v2) {
 		_min = _v2;
 		_max = _v1;
-		curr_adc_read_map = ignore_i2;
+		curr_adc_read_map = ignore_i1;
 	}
 	else {
 		_min = _v1;
 		_max = _v2;
-		curr_adc_read_map = ignore_i1;
+		curr_adc_read_map = ignore_i2;
 	}
 
 	if (_v3 > _max) {
 		_max = _v3;
+		curr_adc_read_map = ignore_i3;
 	}
 	else if (_v3 < _min) {
 		_min = _v3;
-		curr_adc_read_map = ignore_i3;
 	}
 
 	// Converts the sinusoidal waveform into SVM between 0 and 1
@@ -177,7 +178,8 @@ void calculateSVM(float _vq, float _vd) {
 }
 
 void printData(void) {
-	snprintf(_msg, 100, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu, Overrun: %lu\r\n", LL_TIM_GetCounter(TIM3), saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt, pid_loop_overrun);
+	snprintf(_msg, 100, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu, Overrun: %lu\r\n", LL_TIM_GetCounter(TIM3),
+			saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt, pid_loop_overrun);
   LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_1);
   LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, 100);
   LL_DMA_ClearFlag_TC1(DMA1);
