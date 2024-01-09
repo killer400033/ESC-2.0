@@ -21,17 +21,18 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stdio.h"
+#include "constants.h"
+#include "globalVariables.h"
+#include "motorControl.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-extern void fixedToFloat(uint32_t *input1, float *input2);
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -42,8 +43,7 @@ extern void fixedToFloat(uint32_t *input1, float *input2);
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint32_t cordic_write;
-uint32_t cordic_read;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -57,6 +57,8 @@ static void MX_ADC2_Init(void);
 static void MX_OPAMP2_Init(void);
 static void MX_OPAMP3_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_OPAMP1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -105,34 +107,13 @@ int main(void)
   MX_OPAMP2_Init();
   MX_OPAMP3_Init();
   MX_TIM1_Init();
+  MX_ADC1_Init();
+  MX_OPAMP1_Init();
   /* USER CODE BEGIN 2 */
-  #define SQRT3ON2 0.86602540378
-  // This scales _va and _vb by 1/sqrt(3) such that when |(vq, vd)| = 1, the SVM is saturated
-  #define SVM_COMPEN 0.57735026919
-  #define POLE_CNT 4
-  #define ENCODER_RES 2400
-  #define MAGNETIC_AGL_ENCODER_CNT (ENCODER_RES * 2 / POLE_CNT)
-  #define ENCODER_TO_ANGLE (65536.0/(float)MAGNETIC_AGL_ENCODER_CNT)
-  #define PWM_PERIOD 4250
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  char msg[80] = {0};
-  uint32_t input[2];
-  float output[2];
-  uint32_t temp[2];
-
-  float _vq = 0.2;
-  float _vd = 0;
-  float _va;
-  float _vb;
-  float _v1;
-  float _v2;
-  float _v3;
-  float _max;
-  float _min;
-  float _mid;
 
   // PWM Timer Setup
   TIM1->ARR = PWM_PERIOD;
@@ -143,80 +124,21 @@ int main(void)
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH2N);
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH3);
   LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH3N);
+  // Channel 4 used to trigger ADC
+  LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH4);
+  LL_TIM_OC_SetCompareCH4(TIM1, 0);
 
   LL_TIM_EnableAllOutputs(TIM1);
+
+  LL_ADC_REG_StartConversion(ADC1);
+  LL_ADC_REG_StartConversion(ADC2);
+
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_5);
+
+  mainLoop();
+
   while (1)
   {
-	// Example CORDIC unit + DMA code
-	cordic_write = ((uint32_t)(((float)(LL_TIM_GetCounter(TIM3) % MAGNETIC_AGL_ENCODER_CNT)) * ENCODER_TO_ANGLE)) | 0x7FFF0000;
-	input[0] = cordic_read & 0xFFFF;
-	input[1] = cordic_read >> 16;
-	fixedToFloat(input, output);
-
-	// Example Timer code
-
-	// Inverse Park Transform (q axis aligns with d axis)
-	_va = output[1] * _vd - output[0] * _vq;
-	_vb = output[0] * _vd - output[1] * _vq;
-
-	// Inverse Clarke Transform
-	_v1 = _va * SVM_COMPEN;
-	_v2 = (-_va*0.5 + _vb*SQRT3ON2) * SVM_COMPEN;
-	_v3 = (-_va*0.5 - _vb*SQRT3ON2) * SVM_COMPEN;
-
-	// Space Vector Modulation
-	// Finds the min and max value in v1, v2, v3
-	if (_v1 > _v2) {
-		_min = _v2;
-		_max = _v1;
-	}
-	else {
-		_min = _v1;
-		_max = _v2;
-	}
-
-	if (_v3 > _max) {
-		_max = _v3;
-	}
-	else if (_v3 < _min) {
-		_min = _v3;
-	}
-
-	// Converts the sinusoidal waveform into SVM between 0 and 1
-	_mid = (_min + _max) / 2.0;
-	_v1 += 0.5 - _mid;
-	_v2 += 0.5 - _mid;
-	_v3 += 0.5 - _mid;
-
-	// Clamp v1, v2, v3 between 0 to 1. This automatically applies Overmodulation to a trapezoidal waveform
-	_v1 = (_v1 < 0) ? 0 : ((_v1 > 1) ? 1 : _v1);
-	_v2 = (_v2 < 0) ? 0 : ((_v2 > 1) ? 1 : _v2);
-	_v3 = (_v3 < 0) ? 0 : ((_v3 > 1) ? 1 : _v3);
-
-	LL_TIM_OC_SetCompareCH1(TIM1, (float)PWM_PERIOD*_v1);
-	LL_TIM_OC_SetCompareCH2(TIM1, (float)PWM_PERIOD*_v2);
-	LL_TIM_OC_SetCompareCH3(TIM1, (float)PWM_PERIOD*_v3);
-
-	// Example ADC read code
-	LL_ADC_REG_StartConversion(ADC2);
-	while(!LL_ADC_IsActiveFlag_EOC(ADC2));
-	temp[0] = LL_ADC_REG_ReadConversionData12(ADC2);
-
-	while(!LL_ADC_IsActiveFlag_EOC(ADC2));
-	temp[1] = LL_ADC_REG_ReadConversionData12(ADC2);
-	LL_ADC_ClearFlag_EOC(ADC2);
-
-
-	// Debugging and Serial Printing Stuff
-	/*
-	snprintf(msg, 80, "sin: %f, cos: %f, ADC: %lu - %lu\r\n", ENCODER_TO_ANGLE, output[1], temp[0], temp[1]);
-
-	for (int i = 0; i < 80; i++) {
-		LL_USART_TransmitData8(USART2, msg[i]);
-		while (!LL_USART_IsActiveFlag_TXE_TXFNF(USART2));
-	}
-	LL_mDelay(100);
-	*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -271,6 +193,109 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  LL_ADC_InitTypeDef ADC_InitStruct = {0};
+  LL_ADC_REG_InitTypeDef ADC_REG_InitStruct = {0};
+  LL_ADC_CommonInitTypeDef ADC_CommonInitStruct = {0};
+
+  LL_RCC_SetADCClockSource(LL_RCC_ADC12_CLKSOURCE_SYSCLK);
+
+  /* Peripheral clock enable */
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_ADC12);
+
+  /* ADC1 DMA Init */
+
+  /* ADC1 Init */
+  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_4, LL_DMAMUX_REQ_ADC1);
+
+  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_4, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+
+  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_4, LL_DMA_PRIORITY_HIGH);
+
+  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_4, LL_DMA_MODE_CIRCULAR);
+
+  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_4, LL_DMA_PERIPH_NOINCREMENT);
+
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_4, LL_DMA_MEMORY_INCREMENT);
+
+  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_4, LL_DMA_PDATAALIGN_HALFWORD);
+
+  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_4, LL_DMA_MDATAALIGN_HALFWORD);
+
+  /* ADC1 interrupt Init */
+  NVIC_SetPriority(ADC1_2_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),15, 0));
+  NVIC_EnableIRQ(ADC1_2_IRQn);
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Common config
+  */
+  ADC_InitStruct.Resolution = LL_ADC_RESOLUTION_12B;
+  ADC_InitStruct.DataAlignment = LL_ADC_DATA_ALIGN_RIGHT;
+  ADC_InitStruct.LowPowerMode = LL_ADC_LP_MODE_NONE;
+  LL_ADC_Init(ADC1, &ADC_InitStruct);
+  ADC_REG_InitStruct.TriggerSource = LL_ADC_REG_TRIG_EXT_TIM1_TRGO;
+  ADC_REG_InitStruct.SequencerLength = LL_ADC_REG_SEQ_SCAN_DISABLE;
+  ADC_REG_InitStruct.SequencerDiscont = LL_ADC_REG_SEQ_DISCONT_DISABLE;
+  ADC_REG_InitStruct.ContinuousMode = LL_ADC_REG_CONV_SINGLE;
+  ADC_REG_InitStruct.DMATransfer = LL_ADC_REG_DMA_TRANSFER_UNLIMITED;
+  ADC_REG_InitStruct.Overrun = LL_ADC_REG_OVR_DATA_PRESERVED;
+  LL_ADC_REG_Init(ADC1, &ADC_REG_InitStruct);
+  LL_ADC_SetGainCompensation(ADC1, 0);
+  LL_ADC_SetOverSamplingScope(ADC1, LL_ADC_OVS_DISABLE);
+  ADC_CommonInitStruct.CommonClock = LL_ADC_CLOCK_SYNC_PCLK_DIV4;
+  ADC_CommonInitStruct.Multimode = LL_ADC_MULTI_INDEPENDENT;
+  LL_ADC_CommonInit(__LL_ADC_COMMON_INSTANCE(ADC1), &ADC_CommonInitStruct);
+  LL_ADC_REG_SetTriggerEdge(ADC1, LL_ADC_REG_TRIG_EXT_RISING);
+
+  /* Disable ADC deep power down (enabled by default after reset state) */
+  LL_ADC_DisableDeepPowerDown(ADC1);
+  /* Enable ADC internal voltage regulator */
+  LL_ADC_EnableInternalRegulator(ADC1);
+  /* Delay for ADC internal voltage regulator stabilization. */
+  /* Compute number of CPU cycles to wait for, from delay in us. */
+  /* Note: Variable divided by 2 to compensate partially */
+  /* CPU processing cycles (depends on compilation optimization). */
+  /* Note: If system core clock frequency is below 200kHz, wait time */
+  /* is only a few CPU processing cycles. */
+  uint32_t wait_loop_index;
+  wait_loop_index = ((LL_ADC_DELAY_INTERNAL_REGUL_STAB_US * (SystemCoreClock / (100000 * 2))) / 10);
+  while(wait_loop_index != 0)
+  {
+    wait_loop_index--;
+  }
+
+  /** Configure Regular Channel
+  */
+  LL_ADC_REG_SetSequencerRanks(ADC1, LL_ADC_REG_RANK_1, LL_ADC_CHANNEL_VOPAMP1);
+  LL_ADC_SetChannelSamplingTime(ADC1, LL_ADC_CHANNEL_VOPAMP1, LL_ADC_SAMPLINGTIME_2CYCLES_5);
+  LL_ADC_SetChannelSingleDiff(ADC1, LL_ADC_CHANNEL_VOPAMP1, LL_ADC_SINGLE_ENDED);
+  /* USER CODE BEGIN ADC1_Init 2 */
+  LL_ADC_Enable(ADC1);
+  while (!LL_ADC_IsActiveFlag_ADRDY(ADC1)); // Wait until ADC ready
+  LL_ADC_ClearFlag_ADRDY(ADC1); // Clear ADC ready flag
+
+  // Set DMA memory addresses
+  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_4, 1);
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_4, LL_ADC_DMA_GetRegAddr(ADC1, LL_ADC_DMA_REG_REGULAR_DATA), (uint32_t)&(_saved_state.adc_out[2]), LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_4);
+  /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
   * @brief ADC2 Initialization Function
   * @param None
   * @retval None
@@ -284,13 +309,34 @@ static void MX_ADC2_Init(void)
 
   LL_ADC_InitTypeDef ADC_InitStruct = {0};
   LL_ADC_REG_InitTypeDef ADC_REG_InitStruct = {0};
-  LL_ADC_CommonInitTypeDef ADC_CommonInitStruct = {0};
-  LL_ADC_INJ_InitTypeDef ADC_INJ_InitStruct = {0};
 
   LL_RCC_SetADCClockSource(LL_RCC_ADC12_CLKSOURCE_SYSCLK);
 
   /* Peripheral clock enable */
   LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_ADC12);
+
+  /* ADC2 DMA Init */
+
+  /* ADC2 Init */
+  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_3, LL_DMAMUX_REQ_ADC2);
+
+  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_3, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+
+  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_3, LL_DMA_PRIORITY_HIGH);
+
+  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_3, LL_DMA_MODE_CIRCULAR);
+
+  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_3, LL_DMA_PERIPH_NOINCREMENT);
+
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_3, LL_DMA_MEMORY_INCREMENT);
+
+  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_3, LL_DMA_PDATAALIGN_HALFWORD);
+
+  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_3, LL_DMA_MDATAALIGN_HALFWORD);
+
+  /* ADC2 interrupt Init */
+  NVIC_SetPriority(ADC1_2_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),15, 0));
+  NVIC_EnableIRQ(ADC1_2_IRQn);
 
   /* USER CODE BEGIN ADC2_Init 1 */
 
@@ -302,21 +348,16 @@ static void MX_ADC2_Init(void)
   ADC_InitStruct.DataAlignment = LL_ADC_DATA_ALIGN_RIGHT;
   ADC_InitStruct.LowPowerMode = LL_ADC_LP_MODE_NONE;
   LL_ADC_Init(ADC2, &ADC_InitStruct);
-  ADC_REG_InitStruct.TriggerSource = LL_ADC_REG_TRIG_SOFTWARE;
+  ADC_REG_InitStruct.TriggerSource = LL_ADC_REG_TRIG_EXT_TIM1_TRGO;
   ADC_REG_InitStruct.SequencerLength = LL_ADC_REG_SEQ_SCAN_ENABLE_2RANKS;
   ADC_REG_InitStruct.SequencerDiscont = LL_ADC_REG_SEQ_DISCONT_DISABLE;
   ADC_REG_InitStruct.ContinuousMode = LL_ADC_REG_CONV_SINGLE;
-  ADC_REG_InitStruct.DMATransfer = LL_ADC_REG_DMA_TRANSFER_NONE;
+  ADC_REG_InitStruct.DMATransfer = LL_ADC_REG_DMA_TRANSFER_UNLIMITED;
   ADC_REG_InitStruct.Overrun = LL_ADC_REG_OVR_DATA_PRESERVED;
   LL_ADC_REG_Init(ADC2, &ADC_REG_InitStruct);
   LL_ADC_SetGainCompensation(ADC2, 0);
   LL_ADC_SetOverSamplingScope(ADC2, LL_ADC_OVS_DISABLE);
-  ADC_CommonInitStruct.CommonClock = LL_ADC_CLOCK_SYNC_PCLK_DIV4;
-  LL_ADC_CommonInit(__LL_ADC_COMMON_INSTANCE(ADC2), &ADC_CommonInitStruct);
-  ADC_INJ_InitStruct.SequencerLength = 0;
-  ADC_INJ_InitStruct.SequencerDiscont = LL_ADC_INJ_SEQ_DISCONT_DISABLE;
-  ADC_INJ_InitStruct.TrigAuto = LL_ADC_INJ_TRIG_INDEPENDENT;
-  LL_ADC_INJ_Init(ADC2, &ADC_INJ_InitStruct);
+  LL_ADC_REG_SetTriggerEdge(ADC2, LL_ADC_REG_TRIG_EXT_RISING);
 
   /* Disable ADC deep power down (enabled by default after reset state) */
   LL_ADC_DisableDeepPowerDown(ADC2);
@@ -350,6 +391,13 @@ static void MX_ADC2_Init(void)
   LL_ADC_Enable(ADC2);
   while (!LL_ADC_IsActiveFlag_ADRDY(ADC2)); // Wait until ADC ready
   LL_ADC_ClearFlag_ADRDY(ADC2); // Clear ADC ready flag
+
+  // Set DMA memory addresses
+  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_3, 2);
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_3, LL_ADC_DMA_GetRegAddr(ADC2, LL_ADC_DMA_REG_REGULAR_DATA), (uint32_t)_saved_state.adc_out, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_3);
+
+  LL_ADC_EnableIT_EOS(ADC2);
   /* USER CODE END ADC2_Init 2 */
 
 }
@@ -368,65 +416,63 @@ static void MX_CORDIC_Init(void)
   /* Peripheral clock enable */
   LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_CORDIC);
 
-  /* CORDIC DMA Init */
-
-  /* CORDIC_READ Init */
-  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_1, LL_DMAMUX_REQ_CORDIC_READ);
-
-  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_1, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
-
-  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PRIORITY_LOW);
-
-  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MODE_CIRCULAR);
-
-  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PERIPH_NOINCREMENT);
-
-  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MEMORY_INCREMENT);
-
-  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PDATAALIGN_WORD);
-
-  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MDATAALIGN_WORD);
-
-  /* CORDIC_WRITE Init */
-  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_2, LL_DMAMUX_REQ_CORDIC_WRITE);
-
-  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_2, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
-
-  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PRIORITY_LOW);
-
-  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MODE_CIRCULAR);
-
-  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PERIPH_NOINCREMENT);
-
-  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MEMORY_INCREMENT);
-
-  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PDATAALIGN_WORD);
-
-  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MDATAALIGN_WORD);
-
   /* USER CODE BEGIN CORDIC_Init 1 */
-  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, 1);
-  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_1, LL_CORDIC_DMA_GetRegAddr(CORDIC, LL_CORDIC_DMA_REG_DATA_OUT), (uint32_t)&cordic_read, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
 
-  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_2, 1);
-  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_2, (uint32_t)&cordic_write, LL_CORDIC_DMA_GetRegAddr(CORDIC, LL_CORDIC_DMA_REG_DATA_IN), LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
   /* USER CODE END CORDIC_Init 1 */
 
   /* nothing else to be configured */
 
   /* USER CODE BEGIN CORDIC_Init 2 */
-  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_1);
-  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_2);
-  LL_CORDIC_EnableDMAReq_RD(CORDIC);
-  LL_CORDIC_EnableDMAReq_WR(CORDIC);
-
   LL_CORDIC_SetFunction(CORDIC, LL_CORDIC_FUNCTION_SINE);
-  LL_CORDIC_SetPrecision(CORDIC, LL_CORDIC_PRECISION_4CYCLES);
+  LL_CORDIC_SetPrecision(CORDIC, LL_CORDIC_PRECISION_5CYCLES);
   LL_CORDIC_SetNbWrite(CORDIC, LL_CORDIC_NBWRITE_1);
   LL_CORDIC_SetNbRead(CORDIC, LL_CORDIC_NBREAD_1);
   LL_CORDIC_SetInSize(CORDIC, LL_CORDIC_INSIZE_16BITS);
   LL_CORDIC_SetOutSize(CORDIC, LL_CORDIC_OUTSIZE_16BITS);
   /* USER CODE END CORDIC_Init 2 */
+
+}
+
+/**
+  * @brief OPAMP1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_OPAMP1_Init(void)
+{
+
+  /* USER CODE BEGIN OPAMP1_Init 0 */
+
+  /* USER CODE END OPAMP1_Init 0 */
+
+  LL_OPAMP_InitTypeDef OPAMP_InitStruct = {0};
+
+  LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
+  /**OPAMP1 GPIO Configuration
+  PA7   ------> OPAMP1_VINP
+  */
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_7;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN OPAMP1_Init 1 */
+
+  /* USER CODE END OPAMP1_Init 1 */
+  OPAMP_InitStruct.PowerMode = LL_OPAMP_POWERMODE_HIGHSPEED;
+  OPAMP_InitStruct.FunctionalMode = LL_OPAMP_MODE_PGA;
+  OPAMP_InitStruct.InputNonInverting = LL_OPAMP_INPUT_NONINVERT_IO2;
+  OPAMP_InitStruct.InputInverting = LL_OPAMP_INPUT_INVERT_CONNECT_NO;
+  LL_OPAMP_Init(OPAMP1, &OPAMP_InitStruct);
+  LL_OPAMP_SetInputsMuxMode(OPAMP1, LL_OPAMP_INPUT_MUX_DISABLE);
+  LL_OPAMP_SetInternalOutput(OPAMP1, LL_OPAMP_INTERNAL_OUPUT_ENABLED);
+  LL_OPAMP_SetPGAGain(OPAMP1, LL_OPAMP_PGA_GAIN_2_OR_MINUS_1);
+  LL_OPAMP_SetTrimmingMode(OPAMP1, LL_OPAMP_TRIMMING_FACTORY);
+  /* USER CODE BEGIN OPAMP1_Init 2 */
+  LL_OPAMP_Enable(OPAMP1);
+  /* USER CODE END OPAMP1_Init 2 */
 
 }
 
@@ -446,21 +492,21 @@ static void MX_OPAMP2_Init(void)
 
   LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
   /**OPAMP2 GPIO Configuration
-  PA7   ------> OPAMP2_VINP
+  PB0   ------> OPAMP2_VINP
   */
-  GPIO_InitStruct.Pin = LL_GPIO_PIN_7;
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_0;
   GPIO_InitStruct.Mode = LL_GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN OPAMP2_Init 1 */
 
   /* USER CODE END OPAMP2_Init 1 */
   OPAMP_InitStruct.PowerMode = LL_OPAMP_POWERMODE_HIGHSPEED;
   OPAMP_InitStruct.FunctionalMode = LL_OPAMP_MODE_PGA;
-  OPAMP_InitStruct.InputNonInverting = LL_OPAMP_INPUT_NONINVERT_IO0;
+  OPAMP_InitStruct.InputNonInverting = LL_OPAMP_INPUT_NONINVERT_IO2;
   OPAMP_InitStruct.InputInverting = LL_OPAMP_INPUT_INVERT_CONNECT_NO;
   LL_OPAMP_Init(OPAMP2, &OPAMP_InitStruct);
   LL_OPAMP_SetInputsMuxMode(OPAMP2, LL_OPAMP_INPUT_MUX_DISABLE);
@@ -489,21 +535,21 @@ static void MX_OPAMP3_Init(void)
 
   LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
   /**OPAMP3 GPIO Configuration
-  PB0   ------> OPAMP3_VINP
+  PA1   ------> OPAMP3_VINP
   */
-  GPIO_InitStruct.Pin = LL_GPIO_PIN_0;
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_1;
   GPIO_InitStruct.Mode = LL_GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-  LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN OPAMP3_Init 1 */
 
   /* USER CODE END OPAMP3_Init 1 */
   OPAMP_InitStruct.PowerMode = LL_OPAMP_POWERMODE_HIGHSPEED;
   OPAMP_InitStruct.FunctionalMode = LL_OPAMP_MODE_PGA;
-  OPAMP_InitStruct.InputNonInverting = LL_OPAMP_INPUT_NONINVERT_IO0;
+  OPAMP_InitStruct.InputNonInverting = LL_OPAMP_INPUT_NONINVERT_IO2;
   OPAMP_InitStruct.InputInverting = LL_OPAMP_INPUT_INVERT_CONNECT_NO;
   LL_OPAMP_Init(OPAMP3, &OPAMP_InitStruct);
   LL_OPAMP_SetInputsMuxMode(OPAMP3, LL_OPAMP_INPUT_MUX_DISABLE);
@@ -537,8 +583,28 @@ static void MX_TIM1_Init(void)
   /* Peripheral clock enable */
   LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_TIM1);
 
-  /* USER CODE BEGIN TIM1_Init 1 */
+  /* TIM1 DMA Init */
 
+  /* TIM1_CH4 Init */
+  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_5, LL_DMAMUX_REQ_TIM1_CH4);
+
+  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_5, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+
+  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_5, LL_DMA_PRIORITY_HIGH);
+
+  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_5, LL_DMA_MODE_CIRCULAR);
+
+  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_5, LL_DMA_PERIPH_NOINCREMENT);
+
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_5, LL_DMA_MEMORY_NOINCREMENT);
+
+  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_5, LL_DMA_PDATAALIGN_HALFWORD);
+
+  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_5, LL_DMA_MDATAALIGN_HALFWORD);
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_5, 1);
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_5, (uint32_t)&(TIM3->CNT), (uint32_t)&_saved_state.encoder_out, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
   /* USER CODE END TIM1_Init 1 */
   TIM_InitStruct.Prescaler = 0;
   TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_CENTER_DOWN;
@@ -564,7 +630,12 @@ static void MX_TIM1_Init(void)
   LL_TIM_OC_EnablePreload(TIM1, LL_TIM_CHANNEL_CH3);
   LL_TIM_OC_Init(TIM1, LL_TIM_CHANNEL_CH3, &TIM_OC_InitStruct);
   LL_TIM_OC_DisableFast(TIM1, LL_TIM_CHANNEL_CH3);
-  LL_TIM_SetTriggerOutput(TIM1, LL_TIM_TRGO_RESET);
+  TIM_OC_InitStruct.OCMode = LL_TIM_OCMODE_PULSE_ON_COMPARE;
+  LL_TIM_OC_Init(TIM1, LL_TIM_CHANNEL_CH4, &TIM_OC_InitStruct);
+  LL_TIM_OC_DisableFast(TIM1, LL_TIM_CHANNEL_CH4);
+  LL_TIM_OC_SetPulseWidthPrescaler(TIM1, LL_TIM_PWPRSC_X1);
+  LL_TIM_OC_SetPulseWidth(TIM1, 0);
+  LL_TIM_SetTriggerOutput(TIM1, LL_TIM_TRGO_OC4REF);
   LL_TIM_SetTriggerOutput2(TIM1, LL_TIM_TRGO2_RESET);
   LL_TIM_DisableMasterSlaveMode(TIM1);
   TIM_BDTRInitStruct.OSSRState = LL_TIM_OSSR_DISABLE;
@@ -582,6 +653,9 @@ static void MX_TIM1_Init(void)
   TIM_BDTRInitStruct.AutomaticOutput = LL_TIM_AUTOMATICOUTPUT_DISABLE;
   LL_TIM_BDTR_Init(TIM1, &TIM_BDTRInitStruct);
   /* USER CODE BEGIN TIM1_Init 2 */
+  // Set pulse width for channel 4
+  LL_TIM_OC_SetPulseWidthPrescaler(TIM1, LL_TIM_PWPRSC_X1);
+  LL_TIM_OC_SetPulseWidth(TIM1, 100);
   /* USER CODE END TIM1_Init 2 */
   LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOF);
   LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
@@ -752,8 +826,28 @@ static void MX_USART2_UART_Init(void)
   GPIO_InitStruct.Alternate = LL_GPIO_AF_7;
   LL_GPIO_Init(USART2_RX_GPIO_Port, &GPIO_InitStruct);
 
-  /* USER CODE BEGIN USART2_Init 1 */
+  /* USART2 DMA Init */
 
+  /* USART2_TX Init */
+  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_1, LL_DMAMUX_REQ_USART2_TX);
+
+  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_1, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+
+  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PRIORITY_LOW);
+
+  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MODE_NORMAL);
+
+  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PERIPH_NOINCREMENT);
+
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MEMORY_INCREMENT);
+
+  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PDATAALIGN_BYTE);
+
+  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MDATAALIGN_BYTE);
+
+  /* USER CODE BEGIN USART2_Init 1 */
+  LL_DMA_ConfigAddresses(DMA1, LL_DMA_CHANNEL_1, (uint32_t)&_msg, LL_USART_DMA_GetRegAddr(USART2, LL_USART_DMA_REG_DATA_TRANSMIT), LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+  LL_USART_EnableDMAReq_TX(USART2);
   /* USER CODE END USART2_Init 1 */
   USART_InitStruct.PrescalerValue = LL_USART_PRESCALER_DIV1;
   USART_InitStruct.BaudRate = 115200;
@@ -780,7 +874,9 @@ static void MX_USART2_UART_Init(void)
   {
   }
   /* USER CODE BEGIN USART2_Init 2 */
-
+  // Send nothing to set TC1 flag high
+  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, 1);
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_1);
   /* USER CODE END USART2_Init 2 */
 
 }
@@ -800,9 +896,15 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   NVIC_SetPriority(DMA1_Channel1_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
   NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMA1_Channel2_IRQn interrupt configuration */
-  NVIC_SetPriority(DMA1_Channel2_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
-  NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+  /* DMA1_Channel3_IRQn interrupt configuration */
+  NVIC_SetPriority(DMA1_Channel3_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+  NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+  /* DMA1_Channel4_IRQn interrupt configuration */
+  NVIC_SetPriority(DMA1_Channel4_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+  NVIC_EnableIRQ(DMA1_Channel4_IRQn);
+  /* DMA1_Channel5_IRQn interrupt configuration */
+  NVIC_SetPriority(DMA1_Channel5_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+  NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 
 }
 

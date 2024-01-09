@@ -27,6 +27,7 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
 
+#include "globalVariables.h"
 /* USER CODE END TD */
 
 /* Private define ------------------------------------------------------------*/
@@ -213,17 +214,63 @@ void DMA1_Channel1_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles DMA1 channel2 global interrupt.
+  * @brief This function handles DMA1 channel3 global interrupt.
   */
-void DMA1_Channel2_IRQHandler(void)
+void DMA1_Channel3_IRQHandler(void)
 {
-  /* USER CODE BEGIN DMA1_Channel2_IRQn 0 */
+  /* USER CODE BEGIN DMA1_Channel3_IRQn 0 */
 
-  /* USER CODE END DMA1_Channel2_IRQn 0 */
+  /* USER CODE END DMA1_Channel3_IRQn 0 */
 
-  /* USER CODE BEGIN DMA1_Channel2_IRQn 1 */
+  /* USER CODE BEGIN DMA1_Channel3_IRQn 1 */
 
-  /* USER CODE END DMA1_Channel2_IRQn 1 */
+  /* USER CODE END DMA1_Channel3_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 channel4 global interrupt.
+  */
+void DMA1_Channel4_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel4_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel4_IRQn 0 */
+
+  /* USER CODE BEGIN DMA1_Channel4_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel4_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 channel5 global interrupt.
+  */
+void DMA1_Channel5_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel5_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel5_IRQn 0 */
+
+  /* USER CODE BEGIN DMA1_Channel5_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel5_IRQn 1 */
+}
+
+/**
+  * @brief This function handles ADC1 and ADC2 global interrupt.
+  */
+void ADC1_2_IRQHandler(void)
+{
+  /* USER CODE BEGIN ADC1_2_IRQn 0 */
+  /* USER CODE END ADC1_2_IRQn 0 */
+
+  /* USER CODE BEGIN ADC1_2_IRQn 1 */
+	// Move value from "shadow register"
+	saved_state = _saved_state;
+	saved_state.cycle_cnt = curr_cycle_cnt;
+	saved_state.adc_read_map = curr_adc_read_map;
+	curr_cycle_cnt++;
+	LL_ADC_ClearFlag_EOS(ADC2);
+  /* USER CODE END ADC1_2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
