@@ -18,3 +18,4 @@ extern TrigState saved_state;
 extern char _msg[100];
 extern uint32_t curr_cycle_cnt;
 extern enum AdcReadMap curr_adc_read_map;
+extern uint32_t pid_loop_overrun;
