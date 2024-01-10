@@ -1,6 +1,7 @@
 #include "motorControl.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include "main.h"
 #include "constants.h"
 #include "globalVariables.h"
@@ -35,14 +36,14 @@ void mainLoop(void) {
 	// Main Running Loop
   while (1) {
 
-  	// Updating Motor Output
-  	calculateSVM(_vq, _vd);
-
   	// Analyzing Motor Inputs
   	if (pid_loop_overrun) {
   		doPIDLoop(&_vq, &_vd, &prev_q, &prev_d);
   		pid_loop_overrun--;
   	}
+
+  	// Updating Motor Output
+  	calculateSVM(_vq, _vd);
 
     // USART printing
     if (LL_DMA_IsActiveFlag_TC1(DMA1) && printPending) {
@@ -68,9 +69,9 @@ void doPIDLoop(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d) {
 
 	LL_CORDIC_WriteData(CORDIC, ((uint32_t)(((float)(curr_saved_state.encoder_out % MAGNETIC_AGL_ENCODER_CNT)) * ENCODER_TO_ANGLE)) | 0x7FFF0000);
 
-	_i1 = curr_saved_state.adc_out[1] * ADC_SCALING;
-	_i2 = curr_saved_state.adc_out[2] * ADC_SCALING;
-	_i3 = curr_saved_state.adc_out[3] * ADC_SCALING;
+	_i1 = (float)curr_saved_state.adc_out[1] * ADC_SCALING;
+	_i2 = (float)curr_saved_state.adc_out[2] * ADC_SCALING;
+	_i3 = (float)curr_saved_state.adc_out[3] * ADC_SCALING;
 
 	// Clarke Transform
 	if (curr_saved_state.adc_read_map == ignore_i1) {
@@ -178,6 +179,7 @@ void calculateSVM(float _vq, float _vd) {
 }
 
 void printData(void) {
+	memset(_msg, 0, sizeof(_msg));
 	snprintf(_msg, 100, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu, Overrun: %lu\r\n", LL_TIM_GetCounter(TIM3),
 			saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt, pid_loop_overrun);
   LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_1);

@@ -13,7 +13,6 @@ typedef struct TrigState {
 	enum AdcReadMap adc_read_map;
 } TrigState;
 
-extern TrigState _saved_state;
 extern TrigState saved_state;
 extern char _msg[100];
 extern uint32_t curr_cycle_cnt;

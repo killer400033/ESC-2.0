@@ -30,7 +30,6 @@ extern "C" {
 #include "stm32g4xx_ll_adc.h"
 #include "stm32g4xx_ll_cordic.h"
 #include "stm32g4xx_ll_dma.h"
-#include "stm32g4xx_ll_opamp.h"
 #include "stm32g4xx_ll_rcc.h"
 #include "stm32g4xx_ll_bus.h"
 #include "stm32g4xx_ll_crs.h"
