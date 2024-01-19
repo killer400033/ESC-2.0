@@ -1,6 +1,7 @@
 #include "motorControl.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include "main.h"
 #include "constants.h"
 #include "globalVariables.h"
@@ -17,7 +18,6 @@ typedef struct PIDState {
 
 float _P = 1.0;
 float _I = 1.0;
-float _D = 1.0;
 
 float set_iq = 1.0;
 float set_id = 0;
@@ -25,7 +25,7 @@ float set_id = 0;
 // Function Declarations
 void calculateSVM(float _vq, float _vd);
 void printData(void);
-void loopPID(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d);
+void doPIDLoop(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d);
 float calculatePID(PIDState *prev_state, float curr_error, float time);
 
 void mainLoop(void) {
@@ -36,7 +36,13 @@ void mainLoop(void) {
 	// Main Running Loop
   while (1) {
 
-  	// Running Motor Loop
+  	// Analyzing Motor Inputs
+  	if (pid_loop_overrun) {
+  		doPIDLoop(&_vq, &_vd, &prev_q, &prev_d);
+  		pid_loop_overrun--;
+  	}
+
+  	// Updating Motor Output
   	calculateSVM(_vq, _vd);
 
     // USART printing
@@ -46,7 +52,7 @@ void mainLoop(void) {
   }
 }
 
-void loopPID(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d) {
+void doPIDLoop(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d) {
 	float _ia;
 	float _ib;
 	float _i1;
@@ -56,16 +62,16 @@ void loopPID(float *_vq, float *_vd, PIDState *prev_q, PIDState *prev_d) {
 	float _id;
 	float time;
 
-	TrigState curr_saved_state = saved_state;
+	TrigState curr_saved_state = saved_state; // This makes sure saved_state doesn't change through loop
 	curr_cycle_cnt -= curr_saved_state.cycle_cnt; // Make sure PID frequency is atleast 2x slower than PWM frequency
 	uint32_t raw_output[2];
 	float trig_output[2];
 
 	LL_CORDIC_WriteData(CORDIC, ((uint32_t)(((float)(curr_saved_state.encoder_out % MAGNETIC_AGL_ENCODER_CNT)) * ENCODER_TO_ANGLE)) | 0x7FFF0000);
 
-	_i1 = curr_saved_state.adc_out[1] * ADC_SCALING;
-	_i2 = curr_saved_state.adc_out[2] * ADC_SCALING;
-	_i3 = curr_saved_state.adc_out[3] * ADC_SCALING;
+	_i1 = (float)curr_saved_state.adc_out[1] * ADC_SCALING;
+	_i2 = (float)curr_saved_state.adc_out[2] * ADC_SCALING;
+	_i3 = (float)curr_saved_state.adc_out[3] * ADC_SCALING;
 
 	// Clarke Transform
 	if (curr_saved_state.adc_read_map == ignore_i1) {
@@ -140,20 +146,20 @@ void calculateSVM(float _vq, float _vd) {
 	if (_v1 > _v2) {
 		_min = _v2;
 		_max = _v1;
-		curr_adc_read_map = ignore_i2;
+		curr_adc_read_map = ignore_i1;
 	}
 	else {
 		_min = _v1;
 		_max = _v2;
-		curr_adc_read_map = ignore_i1;
+		curr_adc_read_map = ignore_i2;
 	}
 
 	if (_v3 > _max) {
 		_max = _v3;
+		curr_adc_read_map = ignore_i3;
 	}
 	else if (_v3 < _min) {
 		_min = _v3;
-		curr_adc_read_map = ignore_i3;
 	}
 
 	// Converts the sinusoidal waveform into SVM between 0 and 1
@@ -173,7 +179,9 @@ void calculateSVM(float _vq, float _vd) {
 }
 
 void printData(void) {
-	snprintf(_msg, 100, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu\r\n", LL_TIM_GetCounter(TIM3), saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt);
+	memset(_msg, 0, sizeof(_msg));
+	snprintf(_msg, 100, "encoder: %lu, ADC: %u - %u - %u, Cycle: %lu, Overrun: %lu\r\n", LL_TIM_GetCounter(TIM3),
+			saved_state.adc_out[0], saved_state.adc_out[1], saved_state.adc_out[2], saved_state.cycle_cnt, pid_loop_overrun);
   LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_1);
   LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, 100);
   LL_DMA_ClearFlag_TC1(DMA1);

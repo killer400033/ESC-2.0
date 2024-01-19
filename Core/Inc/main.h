@@ -30,7 +30,6 @@ extern "C" {
 #include "stm32g4xx_ll_adc.h"
 #include "stm32g4xx_ll_cordic.h"
 #include "stm32g4xx_ll_dma.h"
-#include "stm32g4xx_ll_opamp.h"
 #include "stm32g4xx_ll_rcc.h"
 #include "stm32g4xx_ll_bus.h"
 #include "stm32g4xx_ll_crs.h"
@@ -75,14 +74,14 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define USART2_TX_Pin LL_GPIO_PIN_2
-#define USART2_TX_GPIO_Port GPIOA
-#define USART2_RX_Pin LL_GPIO_PIN_3
-#define USART2_RX_GPIO_Port GPIOA
 #define T_SWDIO_Pin LL_GPIO_PIN_13
 #define T_SWDIO_GPIO_Port GPIOA
 #define T_SWCLK_Pin LL_GPIO_PIN_14
 #define T_SWCLK_GPIO_Port GPIOA
+#define USART2_RX_Pin LL_GPIO_PIN_15
+#define USART2_RX_GPIO_Port GPIOA
+#define USART2_TX_Pin LL_GPIO_PIN_3
+#define USART2_TX_GPIO_Port GPIOB
 #define LD2_Pin LL_GPIO_PIN_8
 #define LD2_GPIO_Port GPIOB
 #ifndef NVIC_PRIORITYGROUP_0
